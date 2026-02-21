@@ -1,0 +1,7 @@
+{
+  "name": "BackWatch",
+  "description": "AI-gestützte Haltungskorrektur für Apex Studios. Nutzt Computer Vision zur Verbesserung der Sitzposition.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

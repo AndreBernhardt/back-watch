@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "SF Pro Display", "Inter", system-ui, sans-serif;
+  --color-apple-blue: #0A84FF;
+  --color-apple-red: #FF3B30;
+  --color-apple-green: #34C759;
+  --color-apple-orange: #FF9500;
+  --color-apple-gray: #1C1C1E;
+}
+
+@layer base {
+  body {
+    @apply bg-black text-white antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+}
+
+.glass-panel {
+  @apply bg-apple-gray/80 backdrop-blur-xl border border-white/10 rounded-2xl;
+}
+
+.segmented-control {
+  @apply flex p-1 bg-black/40 rounded-lg border border-white/5;
+}
+
+.segmented-item {
+  @apply flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200;
+}
+
+.segmented-item-active {
+  @apply bg-white/10 text-white shadow-sm;
+}
+
+.status-dot {
+  @apply w-3 h-3 rounded-full transition-all duration-500;
+}
+
+.glow-skeleton {
+  filter: drop-shadow(0 0 2px rgba(10, 132, 255, 0.5));
+}
+
+.glow-skeleton-red {
+  filter: drop-shadow(0 0 4px rgba(255, 59, 48, 0.8));
+}
+
