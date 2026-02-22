@@ -316,8 +316,8 @@ export default function App() {
           <canvas 
             ref={canvasRef} 
             className="w-full h-full object-cover"
-            width={1920}
-            height={1080}
+            width={1280}
+            height={720}
             style={{ imageRendering: 'auto' }}
           />
           
