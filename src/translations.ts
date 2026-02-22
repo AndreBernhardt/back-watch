@@ -1,51 +1,93 @@
 export const translations = {
   de: {
     title: "BackWatch",
-    subtitle: "Apex Studios — Designed for Health",
+    subtitle: "Designed for improving your posture while you are at work.",
     startCamera: "Kamera starten",
     stopCamera: "Kamera stoppen",
+    end: "Beenden",
     calibrate: "Haltung kalibrieren",
+    calibrateHint: "Beim Kalibrieren: ca. 55 cm Abstand zum Monitor/Webcam einhalten und eine gesunde, aufrechte Haltung einnehmen.",
+    startupCalibrationMessage: "Beim Kalibrieren bitte 55 cm vom Monitor entfernt sitzen und eine gesunde Haltung einnehmen.",
+    ok: "Verstanden",
     privacyBlur: "Privatsphäre-Blur",
     sensitivity: "Empfindlichkeit",
     sensitivityLow: "1 – nicht streng",
     sensitivityHigh: "10 – streng",
     sensitivityOnlyWhenActive: "Erst nach Start der Kamera einstellbar.",
     timer: "Prüfintervall",
+    alarmSound: "Alarmton",
+    alarmSoundDefault: "Standard",
+    alarmSoundSignal: "Signal",
+    alarmSoundChime: "Twick",
     status: {
       optimal: "Optimal",
       warning: "Warnung",
       alarm: "Alarm",
-      inactive: "Inaktiv"
+      inactive: "Inaktiv",
+      notVisible: "Nicht sichtbar"
     },
+    liveMetrics: "Live-Metriken",
+    neckAngle: "Nackenwinkel",
+    zDistance: "Z-Distanz",
+    slouch: "Durchhängen",
+    calibrated: "Kalibriert",
+    calibrateReminder: "Bitte Haltung kalibrieren.",
+    tryAgain: "Erneut versuchen",
+    cameraInUse: "Kamera wird bereits von einer anderen Anwendung verwendet.",
+    cameraError: "Kamera konnte nicht gestartet werden",
     notifications: {
       title: "Haltungswarnung",
       body: "Bitte korrigiere deine Sitzposition."
     },
-    footer: "© 2026 Apex Studios — Designed for Health"
+    switchLanguage: "Auf Englisch wechseln",
+    lightMode: "Hellmodus",
+    darkMode: "Dunkelmodus",
+    footer: "Apex Studios — Designed for improving your posture while you are at work."
   },
   en: {
     title: "BackWatch",
-    subtitle: "Apex Studios — Designed for Health",
+    subtitle: "Designed for improving your posture while you are at work.",
     startCamera: "Start Camera",
     stopCamera: "Stop Camera",
+    end: "End",
     calibrate: "Calibrate Posture",
+    calibrateHint: "When calibrating: sit about 55 cm from the monitor/webcam and assume a healthy, upright posture.",
+    startupCalibrationMessage: "When calibrating, please sit 55 cm from the monitor and assume a healthy posture.",
+    ok: "Got it",
     privacyBlur: "Privacy Blur",
     sensitivity: "Sensitivity",
     sensitivityLow: "1 – lenient",
     sensitivityHigh: "10 – strict",
     sensitivityOnlyWhenActive: "Adjustable only after starting the camera.",
     timer: "Check Interval",
+    alarmSound: "Alarm sound",
+    alarmSoundDefault: "Default",
+    alarmSoundSignal: "Signal",
+    alarmSoundChime: "Twick",
     status: {
       optimal: "Optimal",
       warning: "Warning",
       alarm: "Alarm",
-      inactive: "Inactive"
+      inactive: "Inactive",
+      notVisible: "Not visible"
     },
+    liveMetrics: "Live Metrics",
+    neckAngle: "Neck Angle",
+    zDistance: "Z-Distance",
+    slouch: "Slouch",
+    calibrated: "Calibrated",
+    calibrateReminder: "Please calibrate your posture.",
+    tryAgain: "Try again",
+    cameraInUse: "Camera is already in use by another application.",
+    cameraError: "Camera could not be started",
     notifications: {
       title: "Posture Warning",
       body: "Please correct your sitting position."
     },
-    footer: "© 2026 Apex Studios — Designed for Health"
+    switchLanguage: "Switch to German",
+    lightMode: "Light mode",
+    darkMode: "Dark mode",
+    footer: "Apex Studios — Designed for improving your posture while you are at work."
   }
 };
 

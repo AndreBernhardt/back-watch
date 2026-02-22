@@ -10,18 +10,22 @@ export interface PostureMetrics {
   isOptimal: boolean;
   isWarning: boolean;
   isAlarm: boolean;
+  /** false = niemand sichtbar, keine Werte anzeigen, kein Alarm */
+  personVisible: boolean;
 }
 
 interface UsePostureTrackingProps {
   sensitivity: number;
   onMetricsUpdate: (metrics: PostureMetrics) => void;
   privacyBlur: boolean;
+  getErrorMessages?: () => { cameraInUse: string; cameraError: string };
 }
 
 export const usePostureTracking = ({
   sensitivity,
   onMetricsUpdate,
   privacyBlur,
+  getErrorMessages,
 }: UsePostureTrackingProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -31,6 +35,8 @@ export const usePostureTracking = ({
   const sensitivityRef = useRef(sensitivity);
   const privacyBlurRef = useRef(privacyBlur);
   const onMetricsUpdateRef = useRef(onMetricsUpdate);
+  const getErrorMessagesRef = useRef(getErrorMessages);
+  getErrorMessagesRef.current = getErrorMessages;
   
   const [isActive, setIsActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +52,22 @@ export const usePostureTracking = ({
     let angle = Math.abs((radians * 180.0) / Math.PI);
     if (angle > 180.0) angle = 360 - angle;
     return angle;
+  };
+
+  /** Prüft, ob eine Person wirklich sichtbar ist (keine Phantom-Pose). */
+  const isPersonReallyVisible = (landmarks: Array<{ x: number; y: number; visibility?: number }>): boolean => {
+    if (!landmarks || landmarks.length < 13) return false;
+    const nose = landmarks[0];
+    const leftShoulder = landmarks[11];
+    const rightShoulder = landmarks[12];
+    if (!nose || !leftShoulder || !rightShoulder) return false;
+    const inFrame = (p: { x: number; y: number }) => p.x >= -0.05 && p.x <= 1.05 && p.y >= -0.05 && p.y <= 1.05;
+    if (!inFrame(nose) || !inFrame(leftShoulder) || !inFrame(rightShoulder)) return false;
+    const vis = (p: { visibility?: number }) => p.visibility == null || p.visibility > 0.5;
+    if (!vis(nose) || !vis(leftShoulder) || !vis(rightShoulder)) return false;
+    const shoulderDist = Math.hypot(rightShoulder.x - leftShoulder.x, rightShoulder.y - leftShoulder.y);
+    if (shoulderDist < 0.02) return false;
+    return true;
   };
 
   const onResults = useCallback((results: Results) => {
@@ -68,9 +90,28 @@ export const usePostureTracking = ({
     canvasCtx.filter = 'none';
 
     if (results.poseLandmarks) {
-      // Posture Analysis
       const landmarks = results.poseLandmarks;
-      
+      const personVisible = isPersonReallyVisible(landmarks);
+
+      if (!personVisible) {
+        const now = Date.now();
+        if (now - lastUpdateRef.current > 100) {
+          onMetricsUpdateRef.current({
+            neckAngle: 0,
+            screenDistance: 0,
+            slouchFactor: 0,
+            isOptimal: true,
+            isWarning: false,
+            isAlarm: false,
+            personVisible: false,
+          });
+          lastUpdateRef.current = now;
+        }
+        canvasCtx.restore();
+        return;
+      }
+
+      // Posture Analysis (nur bei wirklich sichtbarer Person)
       // Neck Angle: Ear (7 or 8) to Shoulder (11 or 12)
       // We'll use the side that is more visible or just average
       const leftEar = landmarks[7];
@@ -106,30 +147,87 @@ export const usePostureTracking = ({
         const bShoulderHeight = (bLandmarks[11].y + bLandmarks[12].y) / 2;
 
         const sens = sensitivityRef.current;
-        // sensitivity 1 = tolerant (großer Toleranzraum), 10 = streng (schneller negativ)
-        const toleranceFactor = (10 - sens) / 9; // 1 bei Sens 1, 0 bei Sens 10
-        
-        // Z-Distanz: bei Sens 4–10 deutlich strenger (kleinere Abweichung = Alarm)
-        const zThreshold = sens >= 4
-          ? 1.05 + (10 - sens) * 0.008   // 1.05 (Sens 10) bis 1.098 (Sens 4)
-          : 1.15 + 0.15 * toleranceFactor;      // Sens 1–3: wie bisher
+        const toleranceFactor = (10 - sens) / 9;
+        const nose = landmarks[0];
+        const earMidX = (leftEar.x + rightEar.x) / 2;
+        const isSideways = nose && Math.abs(nose.x - earMidX) >= 0.07;
+
+        // Z-Distanz: Sens 1–4 wie bisher; ab Sens 5 weniger streng (mehr Toleranz)
+        const zThreshold = sens >= 5
+          ? 1.12 + (10 - sens) * 0.01   // ab 5: toleranter (1.17 bei 5, 1.12 bei 10)
+          : sens >= 4
+            ? 1.05 + (10 - sens) * 0.008
+            : 1.15 + 0.15 * toleranceFactor;
         if (shoulderDist > bShoulderDist * zThreshold) isAlarm = true;
-        if (shoulderHeight > bShoulderHeight + (0.03 + 0.07 * toleranceFactor)) isWarning = true;
-        if (neckAngle < 150 - (25 * toleranceFactor)) isWarning = true;
+
+        // Slouch: Sens 8–10 streng, Sens 6–7 mittel (strenger als 5, weniger als 8), sonst normal
+        const useStrictSlouch = sens >= 6 || (isSideways && sens >= 5);
+        const slouchThreshold = !useStrictSlouch
+          ? 0.03 + 0.07 * toleranceFactor
+          : sens === 6
+            ? 0.055
+            : sens === 7
+              ? 0.042
+              : 0.02 + (10 - sens) * 0.003;
+        if (shoulderHeight > bShoulderHeight + slouchThreshold) isWarning = true;
+
+        // Neck Angle: Sens 8–10 streng, Sens 6–7 mittel (strenger als 5, weniger als 8), sonst normal
+        const useStrictNeck = sens >= 6 || (isSideways && sens >= 5);
+        const neckThreshold = !useStrictNeck
+          ? 150 - 25 * toleranceFactor
+          : sens === 6
+            ? 142
+            : sens === 7
+              ? 148
+              : 155 - (10 - sens) * 1;
+        if (neckAngle < neckThreshold) isWarning = true;
+
+        // User aufgestanden oder wegbewegt → Alarm ausschalten
+        const leftHip = landmarks[23];
+        const rightHip = landmarks[24];
+        // 1) Aufstehen: Oberkörper aufrecht (Schulter–Hüfte-Abstand größer als beim Kalibrieren)
+        if (leftHip && rightHip) {
+          const hipCenterY = (leftHip.y + rightHip.y) / 2;
+          const bHipCenterY = (bLandmarks[23].y + bLandmarks[24].y) / 2;
+          const torsoExtent = hipCenterY - shoulderHeight;
+          const bTorsoExtent = bHipCenterY - bShoulderHeight;
+          if (bTorsoExtent > 0.01 && torsoExtent > bTorsoExtent * 1.12) {
+            isWarning = false;
+            isAlarm = false;
+          }
+        }
+        // 2) Wegbewegt: Person deutlich kleiner im Bild (weiter weg) → kein Sitz-Alarm
+        if (shoulderDist < bShoulderDist * 0.62) {
+          isWarning = false;
+          isAlarm = false;
+        }
       }
 
-      // Throttle state updates to ~10fps to prevent render loops
+      // Z-Distanz-Anzeige: Standard 55, näher = kleiner, weiter = größer
+      const Z_DISTANCE_DEFAULT = 55;
+      const bLandmarksForZ = baselineRef.current?.poseLandmarks;
+      const bShoulderDistForZ = bLandmarksForZ
+        ? Math.sqrt(
+            Math.pow(bLandmarksForZ[11].x - bLandmarksForZ[12].x, 2) +
+            Math.pow(bLandmarksForZ[11].y - bLandmarksForZ[12].y, 2)
+          )
+        : null;
+      const screenDistanceDisplay =
+        bShoulderDistForZ != null && bShoulderDistForZ > 0
+          ? Z_DISTANCE_DEFAULT * (bShoulderDistForZ / shoulderDist)
+          : Z_DISTANCE_DEFAULT;
+
       const now = Date.now();
       if (now - lastUpdateRef.current > 100) {
         onMetricsUpdateRef.current({
           neckAngle,
-          screenDistance: shoulderDist,
+          screenDistance: screenDistanceDisplay,
           slouchFactor: shoulderHeight,
           isOptimal: !isWarning && !isAlarm,
           isWarning,
           isAlarm,
+          personVisible: true,
         });
-        
         lastUpdateRef.current = now;
       }
 
@@ -139,8 +237,60 @@ export const usePostureTracking = ({
       
       // Default color: Apple Blue
       const baseColor = isAlarm ? '#FF3B30' : '#0A84FF';
+      const spineColor = (isWarning || isAlarm) ? '#FF3B30' : '#D8D8D8';  // Normal: leicht grau, etwas weißer
+
+      // Wirbelsäule: Hüfte → Schulter → Hinterkopf (auf Ohrhöhe), Krümmung verstärkt
+      const leftHip = landmarks[23];
+      const rightHip = landmarks[24];
+      const nose = landmarks[0];
+      if (leftHip && rightHip && nose) {
+        const shoulderCenterX = (leftShoulder.x + rightShoulder.x) / 2;
+        const shoulderCenterY = (leftShoulder.y + rightShoulder.y) / 2;
+        const hipCenterX = (leftHip.x + rightHip.x) / 2;
+        const hipCenterY = (leftHip.y + rightHip.y) / 2;
+        const earMidX = (leftEar.x + rightEar.x) / 2;
+        const earMidY = (leftEar.y + rightEar.y) / 2;
+        const dx = earMidX - nose.x;
+        const dy = earMidY - nose.y;
+        const len = Math.hypot(dx, dy) || 1e-6;
+        const backOffset = 0.08;
+        const backOfHeadX = earMidX + (dx / len) * backOffset;
+        const backOfHeadY = earMidY + (dy / len) * backOffset;
+        // Abweichung Schulter von der Geraden Hüfte–Kopf (Richtung der Krümmung)
+        const Lx = backOfHeadX - hipCenterX;
+        const Ly = backOfHeadY - hipCenterY;
+        const L2 = Lx * Lx + Ly * Ly || 1e-12;
+        const t = Math.max(0, Math.min(1, ((shoulderCenterX - hipCenterX) * Lx + (shoulderCenterY - hipCenterY) * Ly) / L2));
+        const projX = hipCenterX + t * Lx;
+        const projY = hipCenterY + t * Ly;
+        const offsetX = shoulderCenterX - projX;
+        const offsetY = shoulderCenterY - projY;
+        // Kubische Bézierkurve: zweiter Kontrollpunkt im oberen Rücken/Schulter → mehr Krümmung dort
+        const c1X = (hipCenterX + shoulderCenterX) / 2 + offsetX * 0.6;
+        const c1Y = (hipCenterY + shoulderCenterY) / 2 + offsetY * 0.6;
+        const upperBackX = shoulderCenterX * 0.7 + backOfHeadX * 0.3;  // Bereich Schulter/oberer Rücken
+        const upperBackY = shoulderCenterY * 0.7 + backOfHeadY * 0.3;
+        const c2X = upperBackX + offsetX * 1.35;  // starke Krümmung im oberen Rücken
+        const c2Y = upperBackY + offsetY * 1.35;
+        canvasCtx.save();
+        canvasCtx.globalAlpha = 0.12;  // Wirbelsäule transparenter, leicht grau
+        canvasCtx.beginPath();
+        canvasCtx.strokeStyle = spineColor;
+        canvasCtx.lineWidth = 3;
+        canvasCtx.shadowBlur = 6;
+        canvasCtx.shadowColor = spineColor;
+        canvasCtx.moveTo(hipCenterX * width, hipCenterY * height);
+        canvasCtx.bezierCurveTo(
+          c1X * width, c1Y * height,
+          c2X * width, c2Y * height,
+          backOfHeadX * width, backOfHeadY * height
+        );
+        canvasCtx.stroke();
+        canvasCtx.restore();
+        canvasCtx.lineWidth = 0.5;
+      }
       
-      // Custom drawing to highlight problem zones
+      // Custom drawing to highlight problem zones (Nacken, restliches Skelett)
       POSE_CONNECTIONS.forEach(([start, end]) => {
         const isNeckConnection = (start === 7 && end === 11) || (start === 8 && end === 12);
         
@@ -163,6 +313,21 @@ export const usePostureTracking = ({
         lineWidth: 0.5,
         radius: 1,
       });
+    } else {
+      // Keine Pose (niemand sitzt vor der Kamera) → keine Werte, kein Alarm
+      const now = Date.now();
+      if (now - lastUpdateRef.current > 100) {
+        onMetricsUpdateRef.current({
+          neckAngle: 0,
+          screenDistance: 0,
+          slouchFactor: 0,
+          isOptimal: true,
+          isWarning: false,
+          isAlarm: false,
+          personVisible: false,
+        });
+        lastUpdateRef.current = now;
+      }
     }
 
     canvasCtx.restore();
@@ -221,10 +386,14 @@ export const usePostureTracking = ({
       setIsActive(true);
     } catch (err: any) {
       console.error("Camera start error:", err);
+      const msgs = getErrorMessagesRef.current?.() ?? {
+        cameraInUse: "Kamera wird bereits von einer anderen Anwendung verwendet.",
+        cameraError: "Kamera konnte nicht gestartet werden",
+      };
       if (err.name === 'NotReadableError' || err.message?.includes('in use')) {
-        setError("Kamera wird bereits von einer anderen Anwendung verwendet.");
+        setError(msgs.cameraInUse);
       } else {
-        setError("Kamera konnte nicht gestartet werden: " + err.message);
+        setError(msgs.cameraError + (err.message ? ": " + err.message : ""));
       }
       setIsActive(false);
     }

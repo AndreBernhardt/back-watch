@@ -2,7 +2,7 @@
 
 @theme {
   --font-sans: "SF Pro Display", "Inter", system-ui, sans-serif;
-  --color-apple-blue: #0A84FF;
+  --color-apple-blue: #50D2E8;
   --color-apple-red: #FF3B30;
   --color-apple-green: #34C759;
   --color-apple-orange: #FF9500;
@@ -33,7 +33,7 @@
 }
 
 .status-dot {
-  @apply w-3 h-3 rounded-full transition-all duration-500;
+  @apply w-4 h-4 rounded-full transition-all duration-500;
 }
 
 .glow-skeleton {
@@ -43,4 +43,47 @@
 .glow-skeleton-red {
   filter: drop-shadow(0 0 4px rgba(255, 59, 48, 0.8));
 }
+
+/* Light theme */
+[data-theme="light"] {
+  background: #f5f5f7;
+  color: #1d1d1f;
+}
+
+[data-theme="light"] .glass-panel {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .text-white\/40,
+[data-theme="light"] .text-white\/50,
+[data-theme="light"] .text-white\/60,
+[data-theme="light"] .text-white\/80,
+[data-theme="light"] .text-white\/90 {
+  color: #1d1d1f !important;
+}
+
+[data-theme="light"] .text-white\/20 { color: rgba(29, 29, 31, 0.2) !important; }
+[data-theme="light"] .text-white\/30 { color: rgba(29, 29, 31, 0.35) !important; }
+[data-theme="light"] .text-white { color: #1d1d1f !important; }
+
+[data-theme="light"] .bg-white\/5 { background-color: rgba(0, 0, 0, 0.05) !important; }
+[data-theme="light"] .bg-white\/10 { background-color: rgba(0, 0, 0, 0.08) !important; }
+[data-theme="light"] .bg-black\/40 { background-color: rgba(0, 0, 0, 0.06) !important; }
+[data-theme="light"] .border-white\/5 { border-color: rgba(0, 0, 0, 0.06) !important; }
+[data-theme="light"] .border-white\/10 { border-color: rgba(0, 0, 0, 0.08) !important; }
+
+[data-theme="light"] .theme-toggle .text-white\/60 { color: #6e6e73 !important; }
+[data-theme="light"] .theme-toggle:hover .text-white\/60 { color: #1d1d1f !important; }
+
+[data-theme="light"] .segmented-item-active {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #1d1d1f !important;
+}
+
+[data-theme="light"] .hover\:bg-white\/5:hover { background-color: rgba(0, 0, 0, 0.05) !important; }
+[data-theme="light"] .hover\:bg-white\/10:hover { background-color: rgba(0, 0, 0, 0.08) !important; }
+[data-theme="light"] .hover\:text-white\/60:hover { color: #1d1d1f !important; }
+[data-theme="light"] .hover\:text-white\/70:hover { color: #1d1d1f !important; }
+[data-theme="light"] .hover\:text-white\/80:hover { color: #1d1d1f !important; }
 

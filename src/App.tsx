@@ -11,21 +11,34 @@ import {
   Bell, 
   Languages,
   Target,
-  CheckCircle2
+  CheckCircle2,
+  StopCircle,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
-  const [lang, setLang] = useState<Language>('de');
+  const [lang, setLang] = useState<Language>('en');
   const [sensitivity, setSensitivity] = useState(5); // 1 = tolerant, 10 = streng
   const [timer, setTimer] = useState(10);
+  const [alarmSoundIndex, setAlarmSoundIndex] = useState(0);
   const [privacyBlur, setPrivacyBlur] = useState(false);
   const [metrics, setMetrics] = useState<PostureMetrics | null>(null);
   const warningStartTimeRef = useRef<number | null>(null);
   const [showCalibratedFeedback, setShowCalibratedFeedback] = useState(false);
+  const [showStartupCalibrationHint, setShowStartupCalibrationHint] = useState(true);
+  const [showCalibrateReminder, setShowCalibrateReminder] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   
   const t = translations[lang];
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const ALARM_SOUNDS = [
+    { url: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3', labelKey: 'alarmSoundDefault' as const },
+    { url: 'https://assets.mixkit.co/active_storage/sfx/2578/2578-preview.mp3', labelKey: 'alarmSoundSignal' as const },
+    { url: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3', labelKey: 'alarmSoundChime' as const },
+  ];
 
   const handleMetricsUpdate = useCallback((newMetrics: PostureMetrics) => {
     setMetrics(newMetrics);
@@ -35,19 +48,40 @@ export default function App() {
     sensitivity,
     onMetricsUpdate: handleMetricsUpdate,
     privacyBlur,
+    getErrorMessages: () => ({ cameraInUse: t.cameraInUse, cameraError: t.cameraError }),
   });
 
   // Calibration feedback effect
   useEffect(() => {
     if (calibrationCount > 0) {
       setShowCalibratedFeedback(true);
+      setShowCalibrateReminder(false);
       const timer = setTimeout(() => setShowCalibratedFeedback(false), 3000);
       return () => clearTimeout(timer);
     }
   }, [calibrationCount]);
 
-  // Notification & Sound Logic
+  const calibrationCountRef = useRef(calibrationCount);
+  calibrationCountRef.current = calibrationCount;
+
+  // Nach 10 Sekunden: Hinweis „Bitte Haltung kalibrieren“, wenn noch nicht kalibriert
   useEffect(() => {
+    if (!isActive) {
+      setShowCalibrateReminder(false);
+      return;
+    }
+    const id = setTimeout(() => {
+      if (calibrationCountRef.current === 0) setShowCalibrateReminder(true);
+    }, 10000);
+    return () => clearTimeout(id);
+  }, [isActive]);
+
+  // Notification & Sound Logic (nur wenn Person sichtbar und am Platz)
+  useEffect(() => {
+    if (metrics?.personVisible !== true) {
+      warningStartTimeRef.current = null;
+      return;
+    }
     if (metrics && (metrics.isWarning || metrics.isAlarm)) {
       if (warningStartTimeRef.current === null) {
         warningStartTimeRef.current = Date.now();
@@ -61,7 +95,6 @@ export default function App() {
               silent: false,
             });
           }
-          // Play sound
           if (audioRef.current) {
             audioRef.current.play().catch(() => {});
           }
@@ -78,19 +111,53 @@ export default function App() {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
-    // Initialize audio
-    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
   }, []);
+
+  useEffect(() => {
+    audioRef.current = new Audio(ALARM_SOUNDS[alarmSoundIndex].url);
+  }, [alarmSoundIndex]);
 
   const getStatusColor = () => {
     if (!isActive) return 'bg-gray-500';
+    if (metrics?.personVisible === false) return 'bg-gray-500';
     if (metrics?.isAlarm) return 'bg-apple-red shadow-[0_0_12px_rgba(255,59,48,0.6)] animate-pulse';
     if (metrics?.isWarning) return 'bg-apple-orange shadow-[0_0_12px_rgba(255,149,0,0.6)]';
     return 'bg-apple-green shadow-[0_0_12px_rgba(52,199,89,0.6)]';
   };
 
   return (
-    <div className="min-h-screen flex flex-col font-sans overflow-hidden">
+    <div className="min-h-screen flex flex-col font-sans overflow-hidden app-theme" data-theme={theme}>
+      {/* Start-Hinweis: Kalibrierung (jedes Mal beim Neustart) */}
+      <AnimatePresence>
+        {showStartupCalibrationHint && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowStartupCalibrationHint(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-panel p-6 max-w-md text-center space-y-4"
+            >
+              <p className="text-sm text-white/90 leading-relaxed">
+                {t.startupCalibrationMessage}
+              </p>
+              <button
+                onClick={() => setShowStartupCalibrationHint(false)}
+                className="px-6 py-2.5 bg-apple-blue hover:bg-apple-blue/90 text-white rounded-xl font-semibold text-sm transition-colors"
+              >
+                {t.ok}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <header className="px-8 py-6 flex justify-between items-center z-10">
         <div className="flex items-center gap-3">
@@ -103,21 +170,44 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="p-2 rounded-full transition-colors theme-toggle"
+            title={theme === 'dark' ? t.lightMode : t.darkMode}
+          >
+            {theme === 'dark' ? <Sun className="w-5 h-5 text-white/60 hover:text-white" /> : <Moon className="w-5 h-5 text-gray-600 hover:text-gray-900" />}
+          </button>
           <button 
             onClick={() => setLang(lang === 'de' ? 'en' : 'de')}
+            title={t.switchLanguage}
             className="p-2 hover:bg-white/5 rounded-full transition-colors"
           >
             <Languages className="w-5 h-5 text-white/60" />
           </button>
-          <div className="flex items-center gap-2 px-3 py-1.5 glass-panel">
+          <div className="flex items-center gap-3 px-5 py-2.5 glass-panel">
             <div className={`status-dot ${getStatusColor()}`} />
-            <span className="text-xs font-medium text-white/80">
-              {!isActive ? t.status.inactive : (metrics?.isAlarm ? t.status.alarm : (metrics?.isWarning ? t.status.warning : t.status.optimal))}
+            <span className="text-sm font-medium text-white/80">
+              {!isActive ? t.status.inactive : (metrics?.personVisible === false ? t.status.notVisible : (metrics?.isAlarm ? t.status.alarm : (metrics?.isWarning ? t.status.warning : t.status.optimal)))}
             </span>
           </div>
         </div>
       </header>
+
+      {/* Kalibrier-Hinweis nach 10 Sekunden, wenn noch nicht kalibriert */}
+      <AnimatePresence>
+        {showCalibrateReminder && isActive && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mx-8 mt-0 mb-2 px-4 py-3 rounded-xl bg-apple-orange/20 border border-apple-orange/40 flex items-center justify-center gap-2"
+          >
+            <Target className="w-5 h-5 text-apple-orange shrink-0" />
+            <p className="text-sm font-medium text-white/90">{t.calibrateReminder}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Content */}
       <main className="flex-1 px-8 pb-8 grid grid-cols-1 lg:grid-cols-4 gap-6 relative">
@@ -154,7 +244,7 @@ export default function App() {
                       onClick={startCamera}
                       className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl font-semibold transition-all"
                     >
-                      Erneut versuchen
+                      {t.tryAgain}
                     </button>
                   </div>
                 ) : (
@@ -183,6 +273,7 @@ export default function App() {
             <button 
               onClick={calibrate}
               disabled={!isActive}
+              title={t.calibrateHint}
               className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-2 ${
                 showCalibratedFeedback 
                   ? 'bg-apple-green text-white shadow-lg shadow-apple-green/20' 
@@ -192,7 +283,7 @@ export default function App() {
               {showCalibratedFeedback ? (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
-                  Kalibriert
+                  {t.calibrated}
                 </>
               ) : (
                 <>
@@ -204,9 +295,10 @@ export default function App() {
             <div className="w-px h-6 bg-white/10" />
             <button 
               onClick={stopCamera}
-              className="p-2 hover:bg-apple-red/20 text-apple-red rounded-xl transition-colors"
+              className="px-4 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-2 hover:bg-apple-red/20 text-apple-red"
             >
-              <CameraOff className="w-5 h-5" />
+              <StopCircle className="w-5 h-5" />
+              {t.end}
             </button>
           </div>
         </section>
@@ -240,34 +332,63 @@ export default function App() {
               )}
             </div>
 
+            {isActive && (
+              <div className="pt-4 border-t border-white/5">
+                <p className="text-[11px] text-white/50 leading-relaxed">{t.calibrateHint}</p>
+              </div>
+            )}
             <div className="pt-4 border-t border-white/5 space-y-4">
               <div className="flex items-center gap-2 text-white/40">
                 <Bell className="w-4 h-4" />
                 <h2 className="text-[10px] uppercase tracking-widest font-bold">{t.timer}</h2>
               </div>
-              
-              <div className="segmented-control">
-                {[5, 10, 30, 60].map((val) => (
+              <div className="grid grid-cols-5 gap-1.5 p-1 rounded-xl bg-black/40 border border-white/5">
+                {[5, 10, 30, 60, 120, 180, 300].map((val) => (
                   <button
                     key={val}
                     onClick={() => setTimer(val)}
-                    className={`segmented-item ${timer === val ? 'segmented-item-active' : 'text-white/40 hover:text-white/60'}`}
+                    className={`min-h-[36px] rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-center ${
+                      timer === val
+                        ? 'bg-white/15 text-white shadow-sm'
+                        : 'text-white/50 hover:text-white/70 hover:bg-white/5'
+                    }`}
                   >
-                    {val}s
+                    {val < 60 ? `${val}s` : `${val / 60}min`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-white/5 space-y-3">
+              <h2 className="text-[10px] uppercase tracking-widest font-bold text-white/40">{t.alarmSound}</h2>
+              <div className="flex flex-wrap gap-2">
+                {ALARM_SOUNDS.map((sound, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setAlarmSoundIndex(idx)}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                      alarmSoundIndex === idx ? 'bg-apple-blue text-white' : 'bg-white/10 text-white/60 hover:text-white/80'
+                    }`}
+                  >
+                    {t[sound.labelKey]}
                   </button>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Metrics Visualization */}
+          {/* Metrics Visualization (nur wenn Person sichtbar) */}
           <div className="glass-panel p-6 space-y-4">
-             <h2 className="text-[10px] uppercase tracking-widest font-bold text-white/40">Live Metrics</h2>
-             <div className="space-y-3">
-                <MetricRow label="Neck Angle" value={`${metrics?.neckAngle.toFixed(0) || 0}°`} active={metrics?.isWarning} />
-                <MetricRow label="Z-Distance" value={`${(metrics?.screenDistance || 0).toFixed(2)}`} active={metrics?.isAlarm} />
-                <MetricRow label="Slouch" value={`${(metrics?.slouchFactor || 0).toFixed(2)}`} active={metrics?.isWarning} />
-             </div>
+             <h2 className="text-[10px] uppercase tracking-widest font-bold text-white/40">{t.liveMetrics}</h2>
+             {metrics?.personVisible === false ? (
+               <p className="text-xs text-white/40">{t.status.notVisible}</p>
+             ) : (
+               <div className="space-y-3">
+                 <MetricRow label={t.neckAngle} value={`${metrics?.neckAngle != null ? metrics.neckAngle.toFixed(0) : '—'}°`} active={metrics?.isWarning} />
+                 <MetricRow label={t.zDistance} value={metrics?.screenDistance != null ? (metrics.screenDistance).toFixed(2) : '—'} active={metrics?.isAlarm} />
+                 <MetricRow label={t.slouch} value={metrics?.slouchFactor != null ? (metrics.slouchFactor).toFixed(2) : '—'} active={metrics?.isWarning} />
+               </div>
+             )}
           </div>
         </aside>
       </main>
@@ -281,10 +402,11 @@ export default function App() {
 }
 
 function MetricRow({ label, value, active }: { label: string, value: string, active?: boolean }) {
+  const colorClass = active ? 'text-apple-red' : 'text-apple-green';
   return (
     <div className="flex justify-between items-center">
-      <span className="text-xs text-white/60">{label}</span>
-      <span className={`text-xs font-mono font-medium ${active ? 'text-apple-red' : 'text-white/80'}`}>{value}</span>
+      <span className={`text-xs ${colorClass}`}>{label}</span>
+      <span className={`text-xs font-mono font-medium ${colorClass}`}>{value}</span>
     </div>
   );
 }
