@@ -18,6 +18,7 @@ interface UsePostureTrackingProps {
   sensitivity: number;
   onMetricsUpdate: (metrics: PostureMetrics) => void;
   privacyBlur: boolean;
+  skeletonColor?: string;
   getErrorMessages?: () => { cameraInUse: string; cameraError: string };
 }
 
@@ -25,6 +26,7 @@ export const usePostureTracking = ({
   sensitivity,
   onMetricsUpdate,
   privacyBlur,
+  skeletonColor = '#0A84FF',
   getErrorMessages,
 }: UsePostureTrackingProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -34,6 +36,7 @@ export const usePostureTracking = ({
   const baselineRef = useRef<Results | null>(null);
   const sensitivityRef = useRef(sensitivity);
   const privacyBlurRef = useRef(privacyBlur);
+  const skeletonColorRef = useRef(skeletonColor);
   const onMetricsUpdateRef = useRef(onMetricsUpdate);
   const getErrorMessagesRef = useRef(getErrorMessages);
   getErrorMessagesRef.current = getErrorMessages;
@@ -42,9 +45,11 @@ export const usePostureTracking = ({
   const [error, setError] = useState<string | null>(null);
   const [calibrationCount, setCalibrationCount] = useState(0);
   const lastUpdateRef = useRef<number>(0);
+  const pixelationBufferRef = useRef<HTMLCanvasElement | null>(null);
 
   sensitivityRef.current = sensitivity;
   privacyBlurRef.current = privacyBlur;
+  skeletonColorRef.current = skeletonColor;
   onMetricsUpdateRef.current = onMetricsUpdate;
 
   const calculateAngle = (p1: any, p2: any, p3: any) => {
@@ -82,12 +87,38 @@ export const usePostureTracking = ({
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, width, height);
 
-    // Draw Video with optional Privacy Blur
+    // Maximum image quality for the video frame
+    canvasCtx.imageSmoothingEnabled = true;
+    canvasCtx.imageSmoothingQuality = 'high';
+
+    // Draw Video with optional Privacy Blur (stark verpixelt + Blur)
     if (privacyBlurRef.current) {
-      canvasCtx.filter = 'blur(20px) brightness(0.7)';
+      const pixelSize = 6;
+      const smallW = Math.max(1, Math.floor(width / pixelSize));
+      const smallH = Math.max(1, Math.floor(height / pixelSize));
+      let buf = pixelationBufferRef.current;
+      if (!buf || buf.width !== smallW || buf.height !== smallH) {
+        buf = document.createElement('canvas');
+        buf.width = smallW;
+        buf.height = smallH;
+        pixelationBufferRef.current = buf;
+      }
+      const bufCtx = buf.getContext('2d');
+      if (bufCtx) {
+        bufCtx.drawImage(results.image, 0, 0, smallW, smallH);
+        canvasCtx.imageSmoothingEnabled = false;
+        canvasCtx.filter = 'blur(16px) brightness(0.7)';
+        canvasCtx.drawImage(buf, 0, 0, smallW, smallH, 0, 0, width, height);
+        canvasCtx.imageSmoothingEnabled = true;
+        canvasCtx.filter = 'none';
+      } else {
+        canvasCtx.filter = 'blur(24px) brightness(0.7)';
+        canvasCtx.drawImage(results.image, 0, 0, width, height);
+        canvasCtx.filter = 'none';
+      }
+    } else {
+      canvasCtx.drawImage(results.image, 0, 0, width, height);
     }
-    canvasCtx.drawImage(results.image, 0, 0, width, height);
-    canvasCtx.filter = 'none';
 
     if (results.poseLandmarks) {
       const landmarks = results.poseLandmarks;
@@ -112,19 +143,30 @@ export const usePostureTracking = ({
       }
 
       // Posture Analysis (nur bei wirklich sichtbarer Person)
-      // Neck Angle: Ear (7 or 8) to Shoulder (11 or 12)
-      // We'll use the side that is more visible or just average
       const leftEar = landmarks[7];
       const leftShoulder = landmarks[11];
       const rightEar = landmarks[8];
       const rightShoulder = landmarks[12];
 
-      // Simple vertical reference for neck angle
-      const neckAngle = calculateAngle(
-        { x: leftEar.x, y: leftEar.y - 0.1 }, // Virtual point above ear
-        leftEar,
-        leftShoulder
+      // Neck angle: use ear midpoint vs shoulder midpoint for forward tilt
+      const earMidX = (leftEar.x + rightEar.x) / 2;
+      const earMidY = (leftEar.y + rightEar.y) / 2;
+      const shoulderMidX = (leftShoulder.x + rightShoulder.x) / 2;
+      const shoulderMidY = (leftShoulder.y + rightShoulder.y) / 2;
+      const forwardNeckAngle = calculateAngle(
+        { x: earMidX, y: earMidY - 0.1 }, // point above ear midpoint
+        { x: earMidX, y: earMidY },
+        { x: shoulderMidX, y: shoulderMidY }
       );
+
+      // Lateral tilt penalty: ears unlevel → head tilted sideways → reduce angle
+      const earDx = Math.abs(leftEar.x - rightEar.x) || 0.001;
+      const earDy = Math.abs(leftEar.y - rightEar.y);
+      const lateralTiltDeg = Math.atan2(earDy, earDx) * 180 / Math.PI;
+
+      // Combined: lateral tilt reduces the effective neck angle (worse posture = lower value)
+      // Multiplier 0.6 = toleranter bei seitlicher Neigung
+      const neckAngle = forwardNeckAngle - lateralTiltDeg * 0.6;
 
       // Screen Distance: Distance between shoulders as proxy for Z
       const shoulderDist = Math.sqrt(
@@ -177,6 +219,12 @@ export const usePostureTracking = ({
           : sens === 5 ? 150                 // 5→150°
           : 150 + (sens - 5);                // 6→151°, 7→152°, … 10→155°
         if (neckAngle < neckThreshold) isWarning = true;
+
+        // Head too far to the side (left or right) → bad posture
+        const shoulderCenterX = (leftShoulder.x + rightShoulder.x) / 2;
+        const headSideOffset = Math.abs(nose.x - shoulderCenterX);
+        const headSideThreshold = 0.16 - (sens - 1) * 0.01; // stricter at higher sensitivity
+        if (headSideOffset > headSideThreshold) isWarning = true;
 
         // User aufgestanden oder wegbewegt → Alarm ausschalten
         const leftHip = landmarks[23];
@@ -232,10 +280,10 @@ export const usePostureTracking = ({
       canvasCtx.lineWidth = 0.5;
       
       // Default color: Apple Blue
-      const baseColor = isAlarm ? '#FF3B30' : '#0A84FF';
+      const baseColor = isAlarm ? '#FF3B30' : skeletonColorRef.current;
       const spineColor = (isWarning || isAlarm) ? '#FF3B30' : '#D8D8D8';  // Normal: leicht grau, etwas weißer
 
-      // Wirbelsäule: Hüfte → Schulter → Hinterkopf (auf Ohrhöhe), Krümmung verstärkt
+      // Spine: draw stylized vertebrae along a Bézier curve (Hip → Shoulder → Nose)
       const leftHip = landmarks[23];
       const rightHip = landmarks[24];
       const nose = landmarks[0];
@@ -244,44 +292,93 @@ export const usePostureTracking = ({
         const shoulderCenterY = (leftShoulder.y + rightShoulder.y) / 2;
         const hipCenterX = (leftHip.x + rightHip.x) / 2;
         const hipCenterY = (leftHip.y + rightHip.y) / 2;
-        const earMidX = (leftEar.x + rightEar.x) / 2;
-        const earMidY = (leftEar.y + rightEar.y) / 2;
-        const dx = earMidX - nose.x;
-        const dy = earMidY - nose.y;
-        const len = Math.hypot(dx, dy) || 1e-6;
-        const backOffset = 0.08;
-        const backOfHeadX = earMidX + (dx / len) * backOffset;
-        const backOfHeadY = earMidY + (dy / len) * backOffset;
-        // Abweichung Schulter von der Geraden Hüfte–Kopf (Richtung der Krümmung)
-        const Lx = backOfHeadX - hipCenterX;
-        const Ly = backOfHeadY - hipCenterY;
+        const headCenterX = nose.x;
+        const headCenterY = nose.y;
+
+        // Bézier control points
+        const Lx = headCenterX - hipCenterX;
+        const Ly = headCenterY - hipCenterY;
         const L2 = Lx * Lx + Ly * Ly || 1e-12;
-        const t = Math.max(0, Math.min(1, ((shoulderCenterX - hipCenterX) * Lx + (shoulderCenterY - hipCenterY) * Ly) / L2));
-        const projX = hipCenterX + t * Lx;
-        const projY = hipCenterY + t * Ly;
+        const tProj = Math.max(0, Math.min(1, ((shoulderCenterX - hipCenterX) * Lx + (shoulderCenterY - hipCenterY) * Ly) / L2));
+        const projX = hipCenterX + tProj * Lx;
+        const projY = hipCenterY + tProj * Ly;
         const offsetX = shoulderCenterX - projX;
         const offsetY = shoulderCenterY - projY;
-        // Kubische Bézierkurve: zweiter Kontrollpunkt im oberen Rücken/Schulter → mehr Krümmung dort
         const c1X = (hipCenterX + shoulderCenterX) / 2 + offsetX * 0.6;
         const c1Y = (hipCenterY + shoulderCenterY) / 2 + offsetY * 0.6;
-        const upperBackX = shoulderCenterX * 0.7 + backOfHeadX * 0.3;  // Bereich Schulter/oberer Rücken
-        const upperBackY = shoulderCenterY * 0.7 + backOfHeadY * 0.3;
-        const c2X = upperBackX + offsetX * 1.35;  // starke Krümmung im oberen Rücken
-        const c2Y = upperBackY + offsetY * 1.35;
+        const upperX = shoulderCenterX * 0.7 + headCenterX * 0.3;
+        const upperY = shoulderCenterY * 0.7 + headCenterY * 0.3;
+        const c2X = upperX + offsetX * 1.35;
+        const c2Y = upperY + offsetY * 1.35;
+
+        // Helper: point and tangent on cubic Bézier at parameter t
+        const P0 = { x: hipCenterX * width, y: hipCenterY * height };
+        const P1 = { x: c1X * width, y: c1Y * height };
+        const P2 = { x: c2X * width, y: c2Y * height };
+        const P3 = { x: headCenterX * width, y: headCenterY * height };
+
+        const bezierPoint = (t: number) => ({
+          x: (1-t)**3*P0.x + 3*(1-t)**2*t*P1.x + 3*(1-t)*t**2*P2.x + t**3*P3.x,
+          y: (1-t)**3*P0.y + 3*(1-t)**2*t*P1.y + 3*(1-t)*t**2*P2.y + t**3*P3.y,
+        });
+        const bezierTangent = (t: number) => {
+          const dx = 3*(1-t)**2*(P1.x-P0.x) + 6*(1-t)*t*(P2.x-P1.x) + 3*t**2*(P3.x-P2.x);
+          const dy = 3*(1-t)**2*(P1.y-P0.y) + 6*(1-t)*t*(P2.y-P1.y) + 3*t**2*(P3.y-P2.y);
+          const len = Math.hypot(dx, dy) || 1;
+          return { dx: dx/len, dy: dy/len };
+        };
+
         canvasCtx.save();
-        canvasCtx.globalAlpha = 0.12;  // Wirbelsäule transparenter, leicht grau
-        canvasCtx.beginPath();
-        canvasCtx.strokeStyle = spineColor;
-        canvasCtx.lineWidth = 3;
         canvasCtx.shadowBlur = 6;
         canvasCtx.shadowColor = spineColor;
-        canvasCtx.moveTo(hipCenterX * width, hipCenterY * height);
-        canvasCtx.bezierCurveTo(
-          c1X * width, c1Y * height,
-          c2X * width, c2Y * height,
-          backOfHeadX * width, backOfHeadY * height
-        );
+
+        // Ribbon: draw the full Bézier curve as a very transparent background band
+        canvasCtx.save();
+        canvasCtx.globalAlpha = 0.06;
+        canvasCtx.strokeStyle = spineColor;
+        canvasCtx.lineWidth = 10;
+        canvasCtx.lineCap = 'round';
+        canvasCtx.lineJoin = 'round';
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(P0.x, P0.y);
+        canvasCtx.bezierCurveTo(P1.x, P1.y, P2.x, P2.y, P3.x, P3.y);
         canvasCtx.stroke();
+        canvasCtx.restore();
+
+        const NUM_VERTEBRAE = 14;
+        for (let i = 0; i < NUM_VERTEBRAE; i++) {
+          const t = i / (NUM_VERTEBRAE - 1);
+          const pt = bezierPoint(t);
+          const tang = bezierTangent(t);
+
+          // Perpendicular direction to spine
+          const nx = -tang.dy;
+          const ny = tang.dx;
+
+          // Vertebra size: wider at hips, narrower at neck
+          const progress = i / (NUM_VERTEBRAE - 1); // 0 = hip, 1 = head
+          const vW = (14 - progress * 6);  // width: 14px at hip → 8px at neck
+          const vH = 4.5;                  // height along spine
+
+          // Draw vertebra as rounded rect centered at pt, oriented along spine
+          canvasCtx.save();
+          canvasCtx.translate(pt.x, pt.y);
+          canvasCtx.transform(tang.dx, tang.dy, nx, ny, 0, 0);
+          canvasCtx.globalAlpha = 0.18;
+          canvasCtx.fillStyle = spineColor;
+          canvasCtx.beginPath();
+          const r = Math.min(vW, vH) / 2;
+          canvasCtx.roundRect(-vH / 2, -vW / 2, vH, vW, r);
+          canvasCtx.fill();
+
+          // Subtle outline for definition
+          canvasCtx.globalAlpha = 0.08;
+          canvasCtx.strokeStyle = spineColor;
+          canvasCtx.lineWidth = 0.5;
+          canvasCtx.stroke();
+          canvasCtx.restore();
+        }
+
         canvasCtx.restore();
         canvasCtx.lineWidth = 0.5;
       }
@@ -374,8 +471,8 @@ export const usePostureTracking = ({
             }
           }
         },
-        width: 1280,
-        height: 720,
+        width: 1920,
+        height: 1080,
       });
 
       await cameraRef.current.start();

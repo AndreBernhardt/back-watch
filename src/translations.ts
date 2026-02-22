@@ -6,8 +6,8 @@ export const translations = {
     stopCamera: "Kamera stoppen",
     end: "Beenden",
     calibrate: "Haltung kalibrieren",
-    calibrateHint: "Beim Kalibrieren: ca. 55 cm Abstand zum Monitor/Webcam einhalten und eine gesunde, aufrechte Haltung einnehmen.",
-    startupCalibrationMessage: "Beim Kalibrieren bitte 55 cm vom Monitor entfernt sitzen und eine gesunde Haltung einnehmen.",
+    calibrateHint: "Beim Kalibrieren: ca. 55 cm Abstand zum Monitor/Webcam einhalten und eine gesunde, aufrechte Haltung einnehmen. Die besten Ergebnisse erzielt man in einem gut beleuchteten Raum.",
+    startupCalibrationMessage: "Beim Kalibrieren bitte 55 cm vom Monitor entfernt sitzen und eine gesunde Haltung einnehmen.",
     ok: "Verstanden",
     privacyBlur: "Privatsphäre-Blur",
     sensitivity: "Empfindlichkeit",
@@ -44,7 +44,14 @@ export const translations = {
     lightMode: "Hellmodus",
     darkMode: "Dunkelmodus",
     footer: "Apex Studios",
-    footerDisclaimer: "Zur Haltungsverbesserung. Kein Medizinprodukt."
+    footerDisclaimer: "Zur Haltungsverbesserung. Kein Medizinprodukt.",
+    footerPrivacy: "Alle Videodaten werden lokal in deinem Browser verarbeitet – es werden keine Daten an Server übertragen.",
+    footerImpressum: "Impressum",
+    footerDatenschutz: "Datenschutz",
+    skeletonColor: "Linienfarbe",
+    skeletonColorBlue: "Blau",
+    skeletonColorLightblue: "Hellblau",
+    skeletonColorWhite: "Weiß"
   },
   en: {
     title: "BackWatch",
@@ -53,8 +60,8 @@ export const translations = {
     stopCamera: "Stop Camera",
     end: "End",
     calibrate: "Calibrate Posture",
-    calibrateHint: "Let's calibrate! Please sit about 22 inches (55 cm) from the webcam and hold a straight, comfortable posture.",
-    startupCalibrationMessage: "When calibrating, please sit 55 cm from the monitor and assume a healthy posture.",
+    calibrateHint: "Let's calibrate! Please sit about 22 inches (55 cm) from the webcam and hold a straight, comfortable posture. Best results in a well-lit room.",
+    startupCalibrationMessage: "When calibrating, please sit 55 cm from the monitor and assume a healthy posture.",
     ok: "Got it",
     privacyBlur: "Privacy Blur",
     sensitivity: "Sensitivity",
@@ -91,7 +98,14 @@ export const translations = {
     lightMode: "Light mode",
     darkMode: "Dark mode",
     footer: "Apex Studios",
-    footerDisclaimer: "Designed for posture improvement. Not a medical device."
+    footerDisclaimer: "Designed for posture improvement. Not a medical device.",
+    footerPrivacy: "All video data is processed locally in your browser – no data is sent to any server.",
+    footerImpressum: "Imprint",
+    footerDatenschutz: "Privacy Policy",
+    skeletonColor: "Line Color",
+    skeletonColorBlue: "Blue",
+    skeletonColorLightblue: "Light Blue",
+    skeletonColorWhite: "White"
   }
 };
 

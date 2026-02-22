@@ -14,7 +14,11 @@ import {
   CheckCircle2,
   StopCircle,
   Moon,
-  Sun
+  Sun,
+  Github,
+  Twitter,
+  Linkedin,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -32,6 +36,7 @@ export default function App() {
   const [showStartupCalibrationHint, setShowStartupCalibrationHint] = useState(true);
   const [showCalibrateReminder, setShowCalibrateReminder] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [skeletonColor, setSkeletonColor] = useState<'blue' | 'lightblue' | 'white'>('blue');
   
   const t = translations[lang];
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -46,10 +51,17 @@ export default function App() {
     setMetrics(newMetrics);
   }, []);
 
+  const SKELETON_COLORS = {
+    blue:      '#0A84FF',
+    lightblue: '#50D2E8',
+    white:     '#FFFFFF',
+  };
+
   const { videoRef, canvasRef, startCamera, stopCamera, calibrate, isActive, error: cameraError, calibrationCount } = usePostureTracking({
     sensitivity,
     onMetricsUpdate: handleMetricsUpdate,
     privacyBlur,
+    skeletonColor: SKELETON_COLORS[skeletonColor],
     getErrorMessages: () => ({ cameraInUse: t.cameraInUse, cameraError: t.cameraError }),
   });
 
@@ -227,8 +239,9 @@ export default function App() {
           <canvas 
             ref={canvasRef} 
             className="w-full h-full object-cover"
-            width={1280}
-            height={720}
+            width={1920}
+            height={1080}
+            style={{ imageRendering: 'auto' }}
           />
           
           <AnimatePresence>
@@ -374,6 +387,27 @@ export default function App() {
             </div>
 
             <div className="pt-4 border-t border-white/5 space-y-3">
+              <h2 className="text-[10px] uppercase tracking-widest font-bold text-white/40">{t.skeletonColor}</h2>
+              <div className="flex gap-2">
+                {([
+                  { key: 'blue',      hex: '#0A84FF' },
+                  { key: 'lightblue', hex: '#50D2E8' },
+                  { key: 'white',     hex: '#FFFFFF'  },
+                ] as const).map(({ key, hex }) => (
+                  <button
+                    key={key}
+                    onClick={() => setSkeletonColor(key)}
+                    title={t[`skeletonColor${key.charAt(0).toUpperCase() + key.slice(1)}` as keyof typeof t] as string}
+                    className={`w-7 h-7 rounded-full border-2 transition-all ${
+                      skeletonColor === key ? 'border-white/70 scale-110' : 'border-white/20 hover:border-white/40'
+                    }`}
+                    style={{ background: hex }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-white/5 space-y-3">
               <h2 className="text-[10px] uppercase tracking-widest font-bold text-white/40">{t.alarmSound}</h2>
               <div className="flex flex-wrap gap-2">
                 {ALARM_SOUNDS.map((sound, idx) => (
@@ -408,10 +442,43 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="px-8 py-6 text-center border-t border-white/5 space-y-1">
-        <p className="text-[10px] text-white/40 font-medium tracking-wide">{t.subtitle}</p>
-        <p className="text-[10px] text-white/30 font-medium tracking-wide">{t.footerDisclaimer}</p>
-        <p className="text-[10px] text-white/20 font-medium tracking-wide uppercase">{t.footer}</p>
+      <footer className="px-8 py-6 border-t border-white/5 space-y-4">
+        {/* Privacy Badge */}
+        <div className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-apple-green/10 border border-apple-green/20 mx-auto max-w-md">
+          <Lock className="w-3 h-3 text-apple-green shrink-0" />
+          <p className="text-[10px] text-apple-green/80 font-medium">{t.footerPrivacy}</p>
+        </div>
+
+        {/* Slogan + Disclaimer */}
+        <div className="text-center space-y-1">
+          <p className="text-[10px] text-white/40 font-medium tracking-wide">{t.subtitle}</p>
+          <p className="text-[10px] text-white/25 font-medium tracking-wide">{t.footerDisclaimer}</p>
+        </div>
+
+        {/* Social + Legal */}
+        <div className="flex items-center justify-between">
+          {/* Social Media Icons */}
+          <div className="flex items-center gap-3">
+            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/50 transition-colors" title="GitHub">
+              <Github className="w-4 h-4" />
+            </a>
+            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/50 transition-colors" title="X / Twitter">
+              <Twitter className="w-4 h-4" />
+            </a>
+            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/50 transition-colors" title="LinkedIn">
+              <Linkedin className="w-4 h-4" />
+            </a>
+          </div>
+
+          {/* Legal Links */}
+          <div className="flex items-center gap-4">
+            <a href="/impressum" className="text-[10px] text-white/20 hover:text-white/50 transition-colors font-medium">{t.footerImpressum}</a>
+            <a href="/datenschutz" className="text-[10px] text-white/20 hover:text-white/50 transition-colors font-medium">{t.footerDatenschutz}</a>
+          </div>
+        </div>
+
+        {/* Brand */}
+        <p className="text-center text-[10px] text-white/15 font-medium tracking-wide uppercase">{t.footer}</p>
       </footer>
     </div>
   );
