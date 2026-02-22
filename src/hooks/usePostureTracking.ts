@@ -10,6 +10,7 @@ export interface PostureMetrics {
   isOptimal: boolean;
   isWarning: boolean;
   isAlarm: boolean;
+  isNeckWarning: boolean;
   /** false = niemand sichtbar, keine Werte anzeigen, kein Alarm */
   personVisible: boolean;
 }
@@ -18,6 +19,7 @@ interface UsePostureTrackingProps {
   sensitivity: number;
   onMetricsUpdate: (metrics: PostureMetrics) => void;
   privacyBlur: boolean;
+  writingMode?: boolean;
   skeletonColor?: string;
   getErrorMessages?: () => { cameraInUse: string; cameraError: string };
 }
@@ -26,6 +28,7 @@ export const usePostureTracking = ({
   sensitivity,
   onMetricsUpdate,
   privacyBlur,
+  writingMode = false,
   skeletonColor = '#0A84FF',
   getErrorMessages,
 }: UsePostureTrackingProps) => {
@@ -36,6 +39,7 @@ export const usePostureTracking = ({
   const baselineRef = useRef<Results | null>(null);
   const sensitivityRef = useRef(sensitivity);
   const privacyBlurRef = useRef(privacyBlur);
+  const writingModeRef = useRef(writingMode);
   const skeletonColorRef = useRef(skeletonColor);
   const onMetricsUpdateRef = useRef(onMetricsUpdate);
   const getErrorMessagesRef = useRef(getErrorMessages);
@@ -49,6 +53,7 @@ export const usePostureTracking = ({
 
   sensitivityRef.current = sensitivity;
   privacyBlurRef.current = privacyBlur;
+  writingModeRef.current = writingMode;
   skeletonColorRef.current = skeletonColor;
   onMetricsUpdateRef.current = onMetricsUpdate;
 
@@ -91,31 +96,10 @@ export const usePostureTracking = ({
     canvasCtx.imageSmoothingEnabled = true;
     canvasCtx.imageSmoothingQuality = 'high';
 
-    // Draw Video with optional Privacy Blur (stark verpixelt + Blur)
+    // Incognito Mode: black background, skeleton only – no video
     if (privacyBlurRef.current) {
-      const pixelSize = 6;
-      const smallW = Math.max(1, Math.floor(width / pixelSize));
-      const smallH = Math.max(1, Math.floor(height / pixelSize));
-      let buf = pixelationBufferRef.current;
-      if (!buf || buf.width !== smallW || buf.height !== smallH) {
-        buf = document.createElement('canvas');
-        buf.width = smallW;
-        buf.height = smallH;
-        pixelationBufferRef.current = buf;
-      }
-      const bufCtx = buf.getContext('2d');
-      if (bufCtx) {
-        bufCtx.drawImage(results.image, 0, 0, smallW, smallH);
-        canvasCtx.imageSmoothingEnabled = false;
-        canvasCtx.filter = 'blur(16px) brightness(0.7)';
-        canvasCtx.drawImage(buf, 0, 0, smallW, smallH, 0, 0, width, height);
-        canvasCtx.imageSmoothingEnabled = true;
-        canvasCtx.filter = 'none';
-      } else {
-        canvasCtx.filter = 'blur(24px) brightness(0.7)';
-        canvasCtx.drawImage(results.image, 0, 0, width, height);
-        canvasCtx.filter = 'none';
-      }
+      canvasCtx.fillStyle = '#000000';
+      canvasCtx.fillRect(0, 0, width, height);
     } else {
       canvasCtx.drawImage(results.image, 0, 0, width, height);
     }
@@ -147,6 +131,7 @@ export const usePostureTracking = ({
       const leftShoulder = landmarks[11];
       const rightEar = landmarks[8];
       const rightShoulder = landmarks[12];
+      const nose = landmarks[0];
 
       // Neck angle: use ear midpoint vs shoulder midpoint for forward tilt
       const earMidX = (leftEar.x + rightEar.x) / 2;
@@ -159,14 +144,20 @@ export const usePostureTracking = ({
         { x: shoulderMidX, y: shoulderMidY }
       );
 
+      // Chin-down penalty: nose drops significantly when head bends forward/down.
+      // In Writing Mode the penalty is fully disabled (user intentionally leans forward).
+      const isWriting = writingModeRef.current;
+      const earShoulderVertDist = Math.max(0.01, shoulderMidY - earMidY);
+      const noseDropRatio = nose ? (nose.y - earMidY) / earShoulderVertDist : 0.45;
+      const chinDownPenalty = isWriting ? 0 : Math.max(0, (noseDropRatio - 0.45) * 160);
+
       // Lateral tilt penalty: ears unlevel → head tilted sideways → reduce angle
       const earDx = Math.abs(leftEar.x - rightEar.x) || 0.001;
       const earDy = Math.abs(leftEar.y - rightEar.y);
       const lateralTiltDeg = Math.atan2(earDy, earDx) * 180 / Math.PI;
 
-      // Combined: lateral tilt reduces the effective neck angle (worse posture = lower value)
-      // Multiplier 0.6 = toleranter bei seitlicher Neigung
-      const neckAngle = forwardNeckAngle - lateralTiltDeg * 0.6;
+      // Combined: chin-down and lateral tilt both reduce the effective neck angle
+      const neckAngle = forwardNeckAngle - chinDownPenalty - lateralTiltDeg * 0.6;
 
       // Screen Distance: Distance between shoulders as proxy for Z
       const shoulderDist = Math.sqrt(
@@ -179,6 +170,8 @@ export const usePostureTracking = ({
 
       let isWarning = false;
       let isAlarm = false;
+      let isRaisedShoulders = false;
+      let isNeckWarning = false;
 
       if (baselineRef.current?.poseLandmarks) {
         const bLandmarks = baselineRef.current.poseLandmarks;
@@ -190,8 +183,6 @@ export const usePostureTracking = ({
 
         const sens = sensitivityRef.current;
         const toleranceFactor = (10 - sens) / 9;
-        const nose = landmarks[0];
-        const earMidX = (leftEar.x + rightEar.x) / 2;
         const isSideways = nose && Math.abs(nose.x - earMidX) >= 0.07;
 
         // Z-Distanz: Sens 1–4 wie bisher; ab Sens 5 weniger streng (mehr Toleranz)
@@ -213,29 +204,35 @@ export const usePostureTracking = ({
               : 0.02 + (10 - sens) * 0.003;
         if (shoulderHeight > bShoulderHeight + slouchThreshold) isWarning = true;
 
-        // Neck Angle: Stufe 5 = 150° (darunter schlechte Haltung), restliche Stufen angepasst
-        const neckThreshold =
-          sens <= 4 ? 125 + (sens - 1) * 5   // 1→125°, 2→130°, 3→135°, 4→140°
-          : sens === 5 ? 150                 // 5→150°
-          : 150 + (sens - 5);                // 6→151°, 7→152°, … 10→155°
-        if (neckAngle < neckThreshold) isWarning = true;
+        // Neck Angle: im Writing Mode stark gelockert (Kopf nach vorne erlaubt)
+        const neckThreshold = isWriting
+          ? 110                               // Writing Mode: sehr tolerant
+          : sens <= 4 ? 130 + (sens - 1) * 5 // 1→130°, 2→135°, 3→140°, 4→145°
+          : sens === 5 ? 150                  // 5→150°
+          : 152 + (sens - 6);                 // 6→152°, 7→153°, 8→154°, 9→155°, 10→156°
+        if (neckAngle < neckThreshold) { isWarning = true; isNeckWarning = true; }
 
-        // Head too far to the side (left or right) → bad posture
+        // Head too far to the side – im Writing Mode ebenfalls lockerer
         const shoulderCenterX = (leftShoulder.x + rightShoulder.x) / 2;
         const headSideOffset = Math.abs(nose.x - shoulderCenterX);
-        const headSideThreshold = 0.16 - (sens - 1) * 0.01; // stricter at higher sensitivity
-        if (headSideOffset > headSideThreshold) isWarning = true;
+        const headSideThreshold = isWriting
+          ? 0.20                              // Writing Mode: deutlich toleranter
+          : sens === 5 ? 0.135
+          : 0.16 - (sens - 1) * 0.01;
+        if (headSideOffset > headSideThreshold) { isWarning = true; isNeckWarning = true; }
 
         // User aufgestanden oder wegbewegt → Alarm ausschalten
         const leftHip = landmarks[23];
         const rightHip = landmarks[24];
-        // 1) Aufstehen: Oberkörper aufrecht (Schulter–Hüfte-Abstand größer als beim Kalibrieren)
+        // 1) Aufstehen: Hüfte muss sich AUCH nach oben bewegt haben (verhindert False Positives bei hochgezogenen Schultern)
         if (leftHip && rightHip) {
           const hipCenterY = (leftHip.y + rightHip.y) / 2;
           const bHipCenterY = (bLandmarks[23].y + bLandmarks[24].y) / 2;
           const torsoExtent = hipCenterY - shoulderHeight;
           const bTorsoExtent = bHipCenterY - bShoulderHeight;
-          if (bTorsoExtent > 0.01 && torsoExtent > bTorsoExtent * 1.12) {
+          // Aufstehen: Torso länger UND Hüfte bewegt sich nach oben (y kleiner)
+          const hipsMovedUp = hipCenterY < bHipCenterY - 0.04;
+          if (bTorsoExtent > 0.01 && torsoExtent > bTorsoExtent * 1.12 && hipsMovedUp) {
             isWarning = false;
             isAlarm = false;
           }
@@ -245,6 +242,34 @@ export const usePostureTracking = ({
           isWarning = false;
           isAlarm = false;
         }
+
+        // Hochgezogene Schultern – NACH dem Aufsteh-Reset prüfen, damit es nicht gelöscht wird
+        // shoulderHeight (y) KLEINER = weiter oben = hochgezogen
+        const raisedShoulderThreshold = sens === 5
+          ? 0.026                              // Stufe 5: etwas lockerer (war 0.020)
+          : 0.028 - (sens - 1) * 0.002;        // 1→0.028, 10→0.010
+        const isRaisedByHeight = shoulderHeight < bShoulderHeight - raisedShoulderThreshold;
+
+        // Ohr-Schulter-Abstand: bei hochgezogenen Schultern nähern sie sich den Ohren
+        const leftEarShoulderDist  = leftShoulder.y  - leftEar.y;
+        const rightEarShoulderDist = rightShoulder.y - rightEar.y;
+        const avgEarShoulderDist   = (leftEarShoulderDist + rightEarShoulderDist) / 2;
+        const bAvgEarShoulderDist  = ((bLandmarks[11].y - bLandmarks[7].y) + (bLandmarks[12].y - bLandmarks[8].y)) / 2;
+        const earShoulderRatio     = sens === 5
+          ? 0.72                               // Stufe 5: lockerer (war 0.76)
+          : 1 - (0.18 + (sens - 1) * 0.015);  // 1→0.82, 10→0.685
+        const isRaisedByEarDist    = bAvgEarShoulderDist > 0.015 && avgEarShoulderDist < bAvgEarShoulderDist * earShoulderRatio;
+
+        isRaisedShoulders = isRaisedByHeight || isRaisedByEarDist;
+        if (isRaisedShoulders) isWarning = true;
+      }
+
+      // Writing Mode: alle Warnungen und Alarme deaktivieren
+      if (isWriting) {
+        isWarning = false;
+        isAlarm = false;
+        isNeckWarning = false;
+        isRaisedShoulders = false;
       }
 
       // Z-Distanz-Anzeige: Standard 55, näher = kleiner, weiter = größer
@@ -270,6 +295,7 @@ export const usePostureTracking = ({
           isOptimal: !isWarning && !isAlarm,
           isWarning,
           isAlarm,
+          isNeckWarning,
           personVisible: true,
         });
         lastUpdateRef.current = now;
@@ -281,19 +307,25 @@ export const usePostureTracking = ({
       
       // Default color: Apple Blue
       const baseColor = isAlarm ? '#FF3B30' : skeletonColorRef.current;
-      const spineColor = (isWarning || isAlarm) ? '#FF3B30' : '#D8D8D8';  // Normal: leicht grau, etwas weißer
+      // Wirbelsäule wird nur rot bei Nacken-/Haltungsproblemen, nicht bei hochgezogenen Schultern
+      const spineColor = (isAlarm || (isWarning && !isRaisedShoulders)) ? '#FF3B30' : '#D8D8D8';
 
       // Spine: draw stylized vertebrae along a Bézier curve (Hip → Shoulder → Nose)
       const leftHip = landmarks[23];
       const rightHip = landmarks[24];
-      const nose = landmarks[0];
       if (leftHip && rightHip && nose) {
         const shoulderCenterX = (leftShoulder.x + rightShoulder.x) / 2;
         const shoulderCenterY = (leftShoulder.y + rightShoulder.y) / 2;
         const hipCenterX = (leftHip.x + rightHip.x) / 2;
         const hipCenterY = (leftHip.y + rightHip.y) / 2;
-        const headCenterX = nose.x;
-        const headCenterY = nose.y;
+        // Chin approximation: midpoint of mouth landmarks (9 & 10) + small downward offset
+        const mouthLeft = landmarks[9];
+        const mouthRight = landmarks[10];
+        const mouthMidX = mouthLeft && mouthRight ? (mouthLeft.x + mouthRight.x) / 2 : nose.x;
+        const mouthMidY = mouthLeft && mouthRight ? (mouthLeft.y + mouthRight.y) / 2 : nose.y;
+        const chinOffsetY = mouthLeft && mouthRight ? (mouthMidY - nose.y) * 0.6 : 0;
+        const headCenterX = mouthMidX;
+        const headCenterY = mouthMidY + chinOffsetY;
 
         // Bézier control points
         const Lx = headCenterX - hipCenterX;
@@ -383,12 +415,18 @@ export const usePostureTracking = ({
         canvasCtx.lineWidth = 0.5;
       }
       
-      // Custom drawing to highlight problem zones (Nacken, restliches Skelett)
+      // Custom drawing to highlight problem zones (Nacken, Torso)
+      // Torso: Schulter–Schulter (11↔12), Schulter–Hüfte (11↔23, 12↔24), Hüfte–Hüfte (23↔24)
+      const TORSO_CONNECTIONS = new Set(['11-12','11-23','12-24','23-24','12-11','23-11','24-12','24-23']);
       POSE_CONNECTIONS.forEach(([start, end]) => {
         const isNeckConnection = (start === 7 && end === 11) || (start === 8 && end === 12);
-        
+        const isTorsoConnection = TORSO_CONNECTIONS.has(`${start}-${end}`);
+
         canvasCtx.beginPath();
-        canvasCtx.strokeStyle = (isNeckConnection && isWarning) ? '#FF3B30' : baseColor;
+        canvasCtx.strokeStyle =
+          (isTorsoConnection && isRaisedShoulders) ? '#FF3B30'
+          : (isNeckConnection && isNeckWarning) ? '#FF3B30'
+          : baseColor;
         canvasCtx.shadowBlur = 4;
         canvasCtx.shadowColor = canvasCtx.strokeStyle;
         
@@ -466,8 +504,8 @@ export const usePostureTracking = ({
           if (videoRef.current && poseRef.current) {
             try {
               await poseRef.current.send({ image: videoRef.current });
-            } catch (e) {
-              console.error("Pose processing error:", e);
+            } catch {
+              // frame processing error – silently skip
             }
           }
         },
@@ -478,15 +516,16 @@ export const usePostureTracking = ({
       await cameraRef.current.start();
       setIsActive(true);
     } catch (err: any) {
-      console.error("Camera start error:", err);
       const msgs = getErrorMessagesRef.current?.() ?? {
         cameraInUse: "Kamera wird bereits von einer anderen Anwendung verwendet.",
         cameraError: "Kamera konnte nicht gestartet werden",
       };
-      if (err.name === 'NotReadableError' || err.message?.includes('in use')) {
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setError(msgs.cameraPermissionDenied ?? msgs.cameraError);
+      } else if (err.name === 'NotReadableError' || err.message?.includes('in use')) {
         setError(msgs.cameraInUse);
       } else {
-        setError(msgs.cameraError + (err.message ? ": " + err.message : ""));
+        setError(msgs.cameraError);
       }
       setIsActive(false);
     }
@@ -496,8 +535,8 @@ export const usePostureTracking = ({
     if (cameraRef.current) {
       try {
         await cameraRef.current.stop();
-      } catch (e) {
-        console.error("Error stopping camera:", e);
+      } catch {
+        // ignore stop errors
       }
       cameraRef.current = null;
       setIsActive(false);
@@ -508,7 +547,7 @@ export const usePostureTracking = ({
   useEffect(() => {
     return () => {
       if (cameraRef.current) {
-        cameraRef.current.stop().catch(console.error);
+        cameraRef.current.stop().catch(() => {});
       }
     };
   }, []);

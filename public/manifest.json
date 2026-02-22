@@ -1,0 +1,37 @@
+{
+  "name": "BackWatch – Better posture. Better work. Better Life.",
+  "short_name": "BackWatch",
+  "description": "Your AI-powered posture coach. Real-time webcam feedback. All data stays in your browser – 100% private.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#34C759",
+  "lang": "en",
+  "categories": ["health", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Writing Mode",
+      "short_name": "Writing",
+      "description": "Start BackWatch in Writing Mode – posture alerts paused",
+      "url": "/?writing=1",
+      "icons": [{ "src": "/icon.png", "sizes": "any" }]
+    },
+    {
+      "name": "Incognito Mode",
+      "short_name": "Incognito",
+      "description": "Start BackWatch in Incognito Mode – skeleton only, no video",
+      "url": "/?incognito=1",
+      "icons": [{ "src": "/icon.png", "sizes": "any" }]
+    }
+  ]
+}
