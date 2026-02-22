@@ -171,15 +171,11 @@ export const usePostureTracking = ({
               : 0.02 + (10 - sens) * 0.003;
         if (shoulderHeight > bShoulderHeight + slouchThreshold) isWarning = true;
 
-        // Neck Angle: Sens 8–10 streng, Sens 6–7 mittel (strenger als 5, weniger als 8), sonst normal
-        const useStrictNeck = sens >= 6 || (isSideways && sens >= 5);
-        const neckThreshold = !useStrictNeck
-          ? 150 - 25 * toleranceFactor
-          : sens === 6
-            ? 142
-            : sens === 7
-              ? 148
-              : 155 - (10 - sens) * 1;
+        // Neck Angle: Stufe 5 = 150° (darunter schlechte Haltung), restliche Stufen angepasst
+        const neckThreshold =
+          sens <= 4 ? 125 + (sens - 1) * 5   // 1→125°, 2→130°, 3→135°, 4→140°
+          : sens === 5 ? 150                 // 5→150°
+          : 150 + (sens - 5);                // 6→151°, 7→152°, … 10→155°
         if (neckAngle < neckThreshold) isWarning = true;
 
         // User aufgestanden oder wegbewegt → Alarm ausschalten

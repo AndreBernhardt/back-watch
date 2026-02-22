@@ -21,11 +21,13 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function App() {
   const [lang, setLang] = useState<Language>('en');
   const [sensitivity, setSensitivity] = useState(5); // 1 = tolerant, 10 = streng
-  const [timer, setTimer] = useState(10);
+  const [timer, setTimer] = useState(30);
   const [alarmSoundIndex, setAlarmSoundIndex] = useState(0);
   const [privacyBlur, setPrivacyBlur] = useState(false);
   const [metrics, setMetrics] = useState<PostureMetrics | null>(null);
   const warningStartTimeRef = useRef<number | null>(null);
+  const NOTIFICATION_COOLDOWN_MS = 1 * 60 * 60 * 1000; // max. 1 Systemmeldung pro Stunde
+  const NOTIFICATION_STORAGE_KEY = 'backwatch_last_system_notification';
   const [showCalibratedFeedback, setShowCalibratedFeedback] = useState(false);
   const [showStartupCalibrationHint, setShowStartupCalibrationHint] = useState(true);
   const [showCalibrateReminder, setShowCalibrateReminder] = useState(false);
@@ -35,9 +37,9 @@ export default function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const ALARM_SOUNDS = [
-    { url: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3', labelKey: 'alarmSoundDefault' as const },
+    { url: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3', labelKey: 'alarmSoundDefault' as const },
     { url: 'https://assets.mixkit.co/active_storage/sfx/2578/2578-preview.mp3', labelKey: 'alarmSoundSignal' as const },
-    { url: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3', labelKey: 'alarmSoundChime' as const },
+    { url: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3', labelKey: 'alarmSoundClassic' as const },
   ];
 
   const handleMetricsUpdate = useCallback((newMetrics: PostureMetrics) => {
@@ -89,11 +91,14 @@ export default function App() {
         const duration = (Date.now() - warningStartTimeRef.current) / 1000;
         if (duration >= timer) {
           // Trigger Alarm
-          if (Notification.permission === 'granted') {
+          const now = Date.now();
+          const lastSaved = parseInt(localStorage.getItem(NOTIFICATION_STORAGE_KEY) ?? '0', 10);
+          if (Notification.permission === 'granted' && (now - lastSaved >= NOTIFICATION_COOLDOWN_MS)) {
             new Notification(t.notifications.title, {
               body: t.notifications.body,
               silent: false,
             });
+            localStorage.setItem(NOTIFICATION_STORAGE_KEY, String(now));
           }
           if (audioRef.current) {
             audioRef.current.play().catch(() => {});
@@ -161,12 +166,12 @@ export default function App() {
       {/* Header */}
       <header className="px-8 py-6 flex justify-between items-center z-10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-apple-blue rounded-xl flex items-center justify-center shadow-lg shadow-apple-blue/20">
+          <div className="app-logo w-10 h-10 bg-apple-blue rounded-xl flex items-center justify-center shadow-lg shadow-apple-blue/20">
             <Target className="text-white w-6 h-6" />
           </div>
           <div>
             <h1 className="text-xl font-semibold tracking-tight">{t.title}</h1>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-medium">{t.subtitle}</p>
+            <p className="text-[10px] tracking-[0.05em] text-white/40 font-medium">{t.subtitle}</p>
           </div>
         </div>
 
@@ -312,19 +317,28 @@ export default function App() {
             </div>
             
             <div className={`space-y-4 ${!isActive ? 'opacity-60' : ''}`}>
-              <input 
-                type="range" 
-                min="1" 
-                max="10" 
-                step="1"
-                value={sensitivity}
-                disabled={!isActive}
-                onChange={(e) => setSensitivity(parseInt(e.target.value))}
-                className="w-full accent-apple-blue bg-white/10 h-1 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
-              />
+              <div className="relative">
+                <input 
+                  type="range" 
+                  min="1" 
+                  max="10" 
+                  step="1"
+                  value={sensitivity}
+                  disabled={!isActive}
+                  onChange={(e) => setSensitivity(parseInt(e.target.value))}
+                  className="sensitivity-slider w-full accent-apple-blue bg-white/10 h-1 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
+                />
+                <div className="absolute top-full left-0 w-full mt-1 h-[1em] pointer-events-none">
+                  <span 
+                    className="absolute text-apple-blue text-[10px] font-medium -translate-x-1/2"
+                    style={{ left: `${((sensitivity - 1) / 9) * 100}%` }}
+                  >
+                    {sensitivity}
+                  </span>
+                </div>
+              </div>
               <div className="flex justify-between text-[10px] text-white/40 font-medium">
                 <span>{t.sensitivityLow}</span>
-                <span className="text-apple-blue">{sensitivity}</span>
                 <span>{t.sensitivityHigh}</span>
               </div>
               {!isActive && (
@@ -343,7 +357,7 @@ export default function App() {
                 <h2 className="text-[10px] uppercase tracking-widest font-bold">{t.timer}</h2>
               </div>
               <div className="grid grid-cols-5 gap-1.5 p-1 rounded-xl bg-black/40 border border-white/5">
-                {[5, 10, 30, 60, 120, 180, 300].map((val) => (
+                {[5, 10, 15, 20, 30, 45, 60, 120, 180, 300].map((val) => (
                   <button
                     key={val}
                     onClick={() => setTimer(val)}
@@ -394,7 +408,9 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="px-8 py-6 text-center border-t border-white/5">
+      <footer className="px-8 py-6 text-center border-t border-white/5 space-y-1">
+        <p className="text-[10px] text-white/40 font-medium tracking-wide">{t.subtitle}</p>
+        <p className="text-[10px] text-white/30 font-medium tracking-wide">{t.footerDisclaimer}</p>
         <p className="text-[10px] text-white/20 font-medium tracking-wide uppercase">{t.footer}</p>
       </footer>
     </div>

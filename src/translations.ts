@@ -1,7 +1,7 @@
 export const translations = {
   de: {
     title: "BackWatch",
-    subtitle: "Designed for improving your posture while you are at work.",
+    subtitle: "Bessere Haltung. Besserer Fokus. Besser arbeiten.",
     startCamera: "Kamera starten",
     stopCamera: "Kamera stoppen",
     end: "Beenden",
@@ -11,13 +11,14 @@ export const translations = {
     ok: "Verstanden",
     privacyBlur: "Privatsphäre-Blur",
     sensitivity: "Empfindlichkeit",
-    sensitivityLow: "1 – nicht streng",
-    sensitivityHigh: "10 – streng",
+    sensitivityLow: "1 nicht streng",
+    sensitivityHigh: "10 streng",
     sensitivityOnlyWhenActive: "Erst nach Start der Kamera einstellbar.",
     timer: "Prüfintervall",
     alarmSound: "Alarmton",
     alarmSoundDefault: "Standard",
     alarmSoundSignal: "Signal",
+    alarmSoundClassic: "Klassisch",
     alarmSoundChime: "Twick",
     status: {
       optimal: "Optimal",
@@ -36,33 +37,35 @@ export const translations = {
     cameraInUse: "Kamera wird bereits von einer anderen Anwendung verwendet.",
     cameraError: "Kamera konnte nicht gestartet werden",
     notifications: {
-      title: "Haltungswarnung",
-      body: "Bitte korrigiere deine Sitzposition."
+      title: "BackWatch",
+      body: "Bitte korrigiere deine Haltung."
     },
     switchLanguage: "Auf Englisch wechseln",
     lightMode: "Hellmodus",
     darkMode: "Dunkelmodus",
-    footer: "Apex Studios — Designed for improving your posture while you are at work."
+    footer: "Apex Studios",
+    footerDisclaimer: "Zur Haltungsverbesserung. Kein Medizinprodukt."
   },
   en: {
     title: "BackWatch",
-    subtitle: "Designed for improving your posture while you are at work.",
+    subtitle: "Better posture. Better focus. Better work.",
     startCamera: "Start Camera",
     stopCamera: "Stop Camera",
     end: "End",
     calibrate: "Calibrate Posture",
-    calibrateHint: "When calibrating: sit about 55 cm from the monitor/webcam and assume a healthy, upright posture.",
+    calibrateHint: "Let's calibrate! Please sit about 22 inches (55 cm) from the webcam and hold a straight, comfortable posture.",
     startupCalibrationMessage: "When calibrating, please sit 55 cm from the monitor and assume a healthy posture.",
     ok: "Got it",
     privacyBlur: "Privacy Blur",
     sensitivity: "Sensitivity",
-    sensitivityLow: "1 – lenient",
-    sensitivityHigh: "10 – strict",
+    sensitivityLow: "1 lenient",
+    sensitivityHigh: "10 strict",
     sensitivityOnlyWhenActive: "Adjustable only after starting the camera.",
     timer: "Check Interval",
     alarmSound: "Alarm sound",
     alarmSoundDefault: "Default",
     alarmSoundSignal: "Signal",
+    alarmSoundClassic: "Classic",
     alarmSoundChime: "Twick",
     status: {
       optimal: "Optimal",
@@ -81,13 +84,14 @@ export const translations = {
     cameraInUse: "Camera is already in use by another application.",
     cameraError: "Camera could not be started",
     notifications: {
-      title: "Posture Warning",
-      body: "Please correct your sitting position."
+      title: "BackWatch",
+      body: "Please correct your posture."
     },
     switchLanguage: "Switch to German",
     lightMode: "Light mode",
     darkMode: "Dark mode",
-    footer: "Apex Studios — Designed for improving your posture while you are at work."
+    footer: "Apex Studios",
+    footerDisclaimer: "Designed for posture improvement. Not a medical device."
   }
 };
 
