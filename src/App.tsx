@@ -401,7 +401,10 @@ export default function App() {
                     className={`w-7 h-7 rounded-full border-2 transition-all ${
                       skeletonColor === key ? 'border-white/70 scale-110' : 'border-white/20 hover:border-white/40'
                     }`}
-                    style={{ background: hex }}
+                    style={{
+                      background: hex,
+                      boxShadow: key === 'white' ? 'inset 0 0 0 1.5px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.12)' : undefined,
+                    }}
                   />
                 ))}
               </div>

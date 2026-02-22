@@ -81,6 +81,20 @@
   margin-top: -5px;
 }
 
+/* Dark mode: besserer Kontrast für gedimmte Texte */
+:root {
+  --text-dim-1: rgba(255, 255, 255, 0.70); /* war /40 */
+  --text-dim-2: rgba(255, 255, 255, 0.55); /* war /30 */
+  --text-dim-3: rgba(255, 255, 255, 0.40); /* war /20 */
+}
+
+body .text-white\/20 { color: rgba(255, 255, 255, 0.68) !important; }
+body .text-white\/25 { color: rgba(255, 255, 255, 0.73) !important; }
+body .text-white\/30 { color: rgba(255, 255, 255, 0.80) !important; }
+body .text-white\/40 { color: rgba(255, 255, 255, 0.88) !important; }
+body .text-white\/50 { color: rgba(255, 255, 255, 0.94) !important; }
+body .text-white\/60 { color: rgba(255, 255, 255, 0.98) !important; }
+
 /* Light theme */
 [data-theme="light"] {
   background: #f5f5f7;
@@ -92,6 +106,9 @@
   border-color: rgba(0, 0, 0, 0.08);
 }
 
+[data-theme="light"] .text-white\/20,
+[data-theme="light"] .text-white\/25,
+[data-theme="light"] .text-white\/30,
 [data-theme="light"] .text-white\/40,
 [data-theme="light"] .text-white\/50,
 [data-theme="light"] .text-white\/60,
@@ -100,8 +117,9 @@
   color: #1d1d1f !important;
 }
 
-[data-theme="light"] .text-white\/20 { color: rgba(29, 29, 31, 0.2) !important; }
-[data-theme="light"] .text-white\/30 { color: rgba(29, 29, 31, 0.35) !important; }
+[data-theme="light"] .text-white\/20 { color: rgba(29, 29, 31, 0.25) !important; }
+[data-theme="light"] .text-white\/25 { color: rgba(29, 29, 31, 0.30) !important; }
+[data-theme="light"] .text-white\/30 { color: rgba(29, 29, 31, 0.40) !important; }
 [data-theme="light"] .text-white { color: #1d1d1f !important; }
 [data-theme="light"] .app-logo .text-white { color: #fff !important; }
 
