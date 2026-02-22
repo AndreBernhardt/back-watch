@@ -1,7 +1,7 @@
 {
   "name": "BackWatch – Better posture. Better work. Better Life.",
   "short_name": "BackWatch",
-  "description": "Your AI-powered posture coach. Real-time webcam feedback. All data stays in your browser – 100% private.",
+  "description": "Your real-time posture coach. Webcam feedback directly in your browser – 100% private, no data leaves your device.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -13,9 +13,21 @@
   "icons": [
     {
       "src": "/icon.png",
-      "sizes": "any",
+      "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -24,14 +36,14 @@
       "short_name": "Writing",
       "description": "Start BackWatch in Writing Mode – posture alerts paused",
       "url": "/?writing=1",
-      "icons": [{ "src": "/icon.png", "sizes": "any" }]
+      "icons": [{ "src": "/icon.png", "sizes": "512x512" }]
     },
     {
       "name": "Incognito Mode",
       "short_name": "Incognito",
       "description": "Start BackWatch in Incognito Mode – skeleton only, no video",
       "url": "/?incognito=1",
-      "icons": [{ "src": "/icon.png", "sizes": "any" }]
+      "icons": [{ "src": "/icon.png", "sizes": "512x512" }]
     }
   ]
 }

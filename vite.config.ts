@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 import fs from 'fs';
 import {defineConfig, loadEnv} from 'vite';
@@ -10,6 +11,32 @@ export default defineConfig(({mode}) => {
     plugins: [
       react(),
       tailwindcss(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['icon.png', 'og-image.png'],
+        manifest: false, // wir nutzen unsere eigene public/manifest.json
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'mediapipe-cdn',
+                expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              },
+            },
+            {
+              urlPattern: /^https:\/\/assets\.mixkit\.co\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'alarm-sounds',
+                expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              },
+            },
+          ],
+        },
+      }),
       {
         name: 'serve-favicon-as-icon',
         configureServer(server) {

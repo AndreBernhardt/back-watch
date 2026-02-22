@@ -30,7 +30,18 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
+  const LANGUAGES: { code: Language; label: string }[] = [
+    { code: 'en', label: 'EN' },
+    { code: 'de', label: 'DE' },
+    { code: 'es', label: 'ES' },
+    { code: 'zh', label: '中文' },
+    { code: 'ja', label: '日本語' },
+  ];
   const [lang, setLang] = useState<Language>('en');
+  const cycleLang = () => {
+    const idx = LANGUAGES.findIndex(l => l.code === lang);
+    setLang(LANGUAGES[(idx + 1) % LANGUAGES.length].code);
+  };
   const [sensitivity, setSensitivity] = useState(5); // 1 = tolerant, 10 = streng
   const [timer, setTimer] = useState(60);
   const [alarmSoundIndex, setAlarmSoundIndex] = useState(0);
@@ -272,12 +283,15 @@ export default function App() {
           >
             {theme === 'dark' ? <Sun className="w-5 h-5 text-white/60 hover:text-white" /> : <Moon className="w-5 h-5 text-gray-600 hover:text-gray-900" />}
           </button>
-          <button 
-            onClick={() => setLang(lang === 'de' ? 'en' : 'de')}
+          <button
+            onClick={cycleLang}
             title={t.switchLanguage}
-            className="p-2 hover:bg-white/5 rounded-full transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-white/10 rounded-full transition-colors"
           >
-            <Languages className="w-5 h-5 text-white/60" />
+            <Languages className="w-4 h-4 text-white/50" />
+            <span className="text-xs font-semibold text-white/70">
+              {LANGUAGES.find(l => l.code === lang)?.label}
+            </span>
           </button>
           <div className="flex items-center gap-3 px-5 py-2.5 glass-panel">
             <div className={`status-dot ${getStatusColor()}`} />
@@ -523,7 +537,7 @@ export default function App() {
                 <h2 className="text-[10px] uppercase tracking-widest font-bold">{t.timer}</h2>
               </div>
               <div className="grid grid-cols-5 gap-1.5 p-1 rounded-xl bg-black/40 border border-white/5">
-                {[5, 10, 15, 20, 30, 45, 60, 120, 180, 300].map((val) => (
+                {[5, 10, 15, 30, 45, 60, 90, 120, 180, 300].map((val) => (
                   <button
                     key={val}
                     onClick={() => setTimer(val)}
@@ -533,7 +547,7 @@ export default function App() {
                         : 'text-white/50 hover:text-white/70 hover:bg-white/5'
                     }`}
                   >
-                    {val < 60 ? `${val}s` : `${val / 60}min`}
+                    {val < 60 ? `${val}s` : val % 60 === 0 ? `${val / 60}min` : `${Math.floor(val / 60)}.5min`}
                   </button>
                 ))}
               </div>
